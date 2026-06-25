@@ -26,7 +26,8 @@ function Perfil() {
       .then(dados => setUserData(dados))
       .catch(err => console.error('Erro ao carregar perfil:', err))
       .finally(() => setCarregando(false));
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   // Firestore primeiro, auth como fallback
   const nome      = userData?.nome       || nomeAuth  || 'Usuário';

@@ -56,7 +56,8 @@ function CameraQR() {
           .catch(() => {});
       }
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   const processarQRCode = (texto) => {
     // Parar câmera antes de navegar

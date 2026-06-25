@@ -12,7 +12,7 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import axios from 'axios';
+
 
 // ============ EVENTOS ============
 
