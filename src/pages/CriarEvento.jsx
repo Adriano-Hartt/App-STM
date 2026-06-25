@@ -7,22 +7,38 @@ function CriarEvento() {
   const navigate = useNavigate();
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
-
   const [form, setForm] = useState({
     titulo: '', tipo: '', descricao: '',
-    data: '', horarioInicio: '', horarioFim: '',
+    horarioInicio: '', horarioFim: '',
     local: '', cargaHoraria: '', capacidade: '',
   });
+  const [datas, setDatas] = useState(['']);
 
   const handle = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleData = (index, value) => {
+    setDatas(prev => {
+      const novas = [...prev];
+      novas[index] = value;
+      return novas;
+    });
+  };
+
+  const adicionarData = () => setDatas(prev => [...prev, '']);
+
+  const removerData = (index) => {
+    if (datas.length === 1) return;
+    setDatas(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.titulo || !form.data || !form.local) {
-      setErro('Preencha ao menos título, data e local.');
+    const datasValidas = datas.filter(d => d.trim() !== '');
+    if (!form.titulo || datasValidas.length === 0 || !form.local) {
+      setErro('Preencha ao menos título, uma data e local.');
       return;
     }
     setErro('');
@@ -30,17 +46,25 @@ function CriarEvento() {
     try {
       await criarEvento({
         ...form,
+        data: datasValidas[0],
+        dias: datasValidas,
+        totalDias: datasValidas.length,
         cargaHoraria: Number(form.cargaHoraria) || 0,
         capacidade: Number(form.capacidade) || 0,
         inscritos: [],
+        minimoPresenca: 80,
       });
       navigate('/admin');
     } catch (error) {
       setErro('Erro ao criar evento. Tente novamente.');
+      console.error(error);
     } finally {
       setCarregando(false);
     }
   };
+
+  const diasValidos = datas.filter(d => d).length;
+  const minimoComparecer = Math.ceil(diasValidos * 0.8);
 
   return (
     <div className="app-container">
@@ -76,8 +100,21 @@ function CriarEvento() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Data *</label>
-            <input className="form-input" type="date" name="data" value={form.data} onChange={handle} />
+            <label className="form-label">Dias do evento * — cada dia terá seu próprio QR Code</label>
+            {datas.map((data, index) => (
+              <div key={index} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
+                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--color-primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '600', flexShrink: 0 }}>
+                  {index + 1}
+                </div>
+                <input className="form-input" type="date" value={data} onChange={(e) => handleData(index, e.target.value)} style={{ flex: 1 }} />
+                {datas.length > 1 && (
+                  <button type="button" onClick={() => removerData(index)} style={{ background: '#FCEBEB', color: '#791F1F', border: '0.5px solid #F09595', borderRadius: 'var(--border-radius-md)', padding: '8px 12px', cursor: 'pointer', fontSize: '13px', flexShrink: 0 }}>✕</button>
+                )}
+              </div>
+            ))}
+            <button type="button" onClick={adicionarData} style={{ background: 'var(--color-background-secondary)', border: '0.5px dashed var(--color-border)', borderRadius: 'var(--border-radius-md)', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', color: 'var(--color-primary)', width: '100%', marginTop: '4px' }}>
+              + Adicionar outro dia
+            </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -107,12 +144,16 @@ function CriarEvento() {
             </div>
           </div>
 
+          {diasValidos > 0 && (
+            <div className="alert alert-info" style={{ fontSize: '12px' }}>
+              📊 Presença mínima: <strong>80%</strong> — com {diasValidos} dia(s), o participante precisa comparecer em pelo menos <strong>{minimoComparecer}</strong> dia(s).
+            </div>
+          )}
+
           <button type="submit" className="btn btn-primary" disabled={carregando}>
             {carregando ? 'Salvando...' : '✓ Criar evento'}
           </button>
-          <button type="button" className="btn btn-secondary" onClick={() => navigate('/admin')}>
-            Cancelar
-          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate('/admin')}>Cancelar</button>
         </form>
       </div>
     </div>

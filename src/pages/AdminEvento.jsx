@@ -9,16 +9,24 @@ import '../styles/App.css';
 function gerarCSVParaExcel(participantes, nomeEvento) {
   const BOM   = '\uFEFF';                   // garante UTF-8 no Excel
   const sep   = ';';                        // separador ponto-e-vírgula (padrão PT-BR)
-  const header = ['Nome', 'Matrícula', 'Lotação', 'E-mail', 'Vínculo JMU', 'Data/Hora Confirmação'].join(sep);
+  const header = ['Nome', 'Matrícula', 'Lotação', 'E-mail', 'Vínculo JMU', 'Dias Presentes', 'Total Dias', '% Presença', 'Situação'].join(sep);
 
-  const linhas = participantes.map(p => [
-    p.nome        ?? '',
-    p.matricula   ?? '',
-    p.lotacao     ?? '',
-    p.email       ?? '',
-    p.ligacaoJMU  ?? '',
-    p.dataHora    ? new Date(p.dataHora?.seconds * 1000).toLocaleString('pt-BR') : '',
-  ].join(sep));
+  const linhas = participantes.map(p => {
+  const diasPresentes = p.diasPresentes || 1;
+  const totalDias = evento?.totalDias || 1;
+  const percentual = Math.round((diasPresentes / totalDias) * 100);
+  return [
+    p.nome ?? '',
+    p.matricula ?? '',
+    p.lotacao ?? '',
+    p.email ?? '',
+    p.ligacaoJMU ?? '',
+    diasPresentes,
+    totalDias,
+    percentual + '%',
+    percentual >= 80 ? 'Aprovado' : 'Reprovado',
+  ].join(sep);
+});
 
   const csv = BOM + [header, ...linhas].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
