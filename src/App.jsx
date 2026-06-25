@@ -20,6 +20,7 @@ import GerarQRCode      from './pages/GerarQRCode';
 import Perfil           from './pages/Perfil';
 import Admin            from './pages/Admin';
 import AdminEvento      from './pages/AdminEvento';
+import CriarEvento      from './pages/CriarEvento';
 
 function App() {
   const [user,    setUser]    = useState(null);
@@ -66,6 +67,7 @@ function App() {
             {/* Área admin */}
             <Route path="/admin"                    element={<Admin />} />
             <Route path="/admin/evento/:id"         element={<AdminEvento />} />
+            <Route path="/admin/criar-evento"       element={<CriarEvento />} />
             <Route path="/admin/qrcode/:eventoId"   element={<GerarQRCode />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
