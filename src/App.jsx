@@ -21,6 +21,7 @@ import Perfil           from './pages/Perfil';
 import Admin            from './pages/Admin';
 import AdminEvento      from './pages/AdminEvento';
 import CriarEvento      from './pages/CriarEvento';
+import CriarAdmin       from './pages/CriarAdmin';
 
 function App() {
   const [user,    setUser]    = useState(null);
@@ -68,6 +69,7 @@ function App() {
             <Route path="/admin"                    element={<Admin />} />
             <Route path="/admin/evento/:id"         element={<AdminEvento />} />
             <Route path="/admin/criar-evento"       element={<CriarEvento />} />
+            <Route path="/admin/criar-admin"        element={<CriarAdmin />} />
             <Route path="/admin/qrcode/:eventoId"   element={<GerarQRCode />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
