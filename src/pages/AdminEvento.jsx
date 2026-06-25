@@ -6,7 +6,7 @@ import '../styles/App.css';
 // ─── Exportação XLSX sem dependência de backend ───────────────────
 // Usamos a API Blob + CSV simples que o Excel abre nativamente.
 // Para XLSX real, instale a lib "xlsx" (SheetJS) e substitua gerarXLSX().
-function gerarCSVParaExcel(participantes, nomeEvento) {
+function gerarCSVParaExcel(participantes, nomeEvento, evento) {
   const BOM   = '\uFEFF';                   // garante UTF-8 no Excel
   const sep   = ';';                        // separador ponto-e-vírgula (padrão PT-BR)
   const header = ['Nome', 'Matrícula', 'Lotação', 'E-mail', 'Vínculo JMU', 'Dias Presentes', 'Total Dias', '% Presença', 'Situação'].join(sep);
@@ -87,7 +87,7 @@ function AdminEvento() {
   const handleExportar = () => {
     setExportando(true);
     try {
-      gerarCSVParaExcel(participantes, evento?.titulo ?? 'evento');
+      gerarCSVParaExcel(participantes, evento?.titulo ?? 'evento', evento);
     } finally {
       setTimeout(() => setExportando(false), 800);
     }
@@ -101,12 +101,20 @@ function AdminEvento() {
     );
   }
 
-  if (!evento) {
+ if (!evento) {
     return (
       <div className="app-container">
-        <div className="top-bar">
+        <div className="tbar">
           <button className="back-btn" onClick={() => navigate('/admin')}>←</button>
           <h3>Evento não encontrado</h3>
+        </div>
+        <div className="app-content">
+          <div className="alert alert-danger">
+            Evento não encontrado. Ele pode ter sido removido ou o ID está incorreto.
+          </div>
+          <button className="btn btn-secondary" onClick={() => navigate('/admin')}>
+            Voltar ao painel
+          </button>
         </div>
       </div>
     );
