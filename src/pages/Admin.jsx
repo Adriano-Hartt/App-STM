@@ -38,8 +38,8 @@ function Admin() {
         {/* ── ABA EVENTOS ── */}
         {aba === 'eventos' && (
           <>
-            <button className="btn btn-primary" style={{ marginBottom: '16px' }}>
-              + Criar novo evento
+            <button className="btn btn-primary" style={{ marginBottom: '16px' }} onClick={() => navigate('/admin/criar-evento')}>
+            + Criar novo evento
             </button>
 
             {carregando && (
@@ -85,7 +85,7 @@ function Admin() {
                     🔳 QR Codes
                   </button>
 
-                  <button className="btn-sm">✏️ Editar</button>
+                  <button className="btn-sm" onClick={() => navigate(`/admin/editar-evento/${ev.id}`)}>✏️ Editar</button>
                 </div>
               </div>
             ))}
@@ -110,10 +110,12 @@ function Admin() {
                   >
                     📋 Ver presenças
                   </button>
-                  <button className="btn-sm" style={{ background: '#EAF3DE', color: '#3B6D11' }}>
+                  <button className="btn-sm" onClick={() => navigate('/admin/qrcode/exemplo')} style={{ background: '#EAF3DE', color: '#3B6D11' }}>
                     🔳 QR Codes
                   </button>
-                  <button className="btn-sm">✏️ Editar</button>
+                  <button className="btn-sm" onClick={() => navigate('/admin/editar-evento/exemplo')}>
+                    ✏️ Editar
+                  </button>
                 </div>
               </div>
             )}
@@ -152,7 +154,7 @@ function Admin() {
               </div>
             ))}
 
-            <button className="btn btn-primary" style={{ marginTop: '8px' }}>
+            <button className="btn btn-primary" style={{ marginTop: '8px' }} onClick={() => navigate('/admin/criar-admin')}>
               + Adicionar administrador
             </button>
           </>
