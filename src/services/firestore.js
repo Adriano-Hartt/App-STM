@@ -13,14 +13,13 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-
 // ============ EVENTOS ============
 
 export const obterEventos = async () => {
   try {
     const q = query(collection(db, 'eventos'), orderBy('data', 'asc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (error) {
     console.error('Erro ao obter eventos:', error);
     throw error;
@@ -41,18 +40,9 @@ export const obterDetalhesEvento = async (eventoId) => {
 export const inscreverEmEvento = async (usuarioId, eventoId) => {
   try {
     const eventoRef = doc(db, 'eventos', eventoId);
-    
-    // Adicionar usuário à lista de inscritos
-    await updateDoc(eventoRef, {
-      inscritos: arrayUnion(usuarioId),
-    });
-
-    // Adicionar evento à lista do usuário
+    await updateDoc(eventoRef, { inscritos: arrayUnion(usuarioId) });
     const usuarioRef = doc(db, 'usuarios', usuarioId);
-    await updateDoc(usuarioRef, {
-      eventosInscritos: arrayUnion(eventoId),
-    });
-
+    await updateDoc(usuarioRef, { eventosInscritos: arrayUnion(eventoId) });
     return true;
   } catch (error) {
     console.error('Erro ao inscrever:', error);
@@ -67,7 +57,7 @@ export const obterEventosDoUsuario = async (usuarioId) => {
       where('inscritos', 'array-contains', usuarioId)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (error) {
     console.error('Erro ao obter eventos do usuário:', error);
     throw error;
@@ -78,25 +68,44 @@ export const obterEventosDoUsuario = async (usuarioId) => {
 
 export const registrarFrequencia = async (usuarioId, eventoId, dados) => {
   try {
-    // Salvar no Firestore
-    const frequenciaRef = doc(collection(db, 'frequencia'));
+    const diaIndex = dados.diaIndex ?? 0;
+
+    // ID determinístico: 1 registro por usuário+evento.
+    // Se escanear vários dias, atualiza o mesmo registro contando os dias.
+    const registroId = `${usuarioId}_${eventoId}`;
+    const frequenciaRef = doc(db, 'frequencia', registroId);
+
+    const existente = await getDoc(frequenciaRef);
+    let diasPresentes = [diaIndex];
+
+    if (existente.exists()) {
+      const atual = existente.data().diasPresentesLista || [];
+      diasPresentes = atual.includes(diaIndex) ? atual : [...atual, diaIndex];
+    }
+
     await setDoc(frequenciaRef, {
       usuarioId,
       eventoId,
-      nome: dados.nome,
-      matricula: dados.matricula,
-      lotacao: dados.lotacao,
+      nome: dados.nome || '',
+      matricula: dados.matricula || '',
+      lotacao: dados.lotacao || '',
+      email: dados.email || '',
+      ligacaoJMU: dados.ligacaoJMU || '',
+      diasPresentesLista: diasPresentes,
+      diasPresentes: diasPresentes.length,
+      totalDias: dados.totalDias ?? 1,
       dataHora: serverTimestamp(),
-      qrCodeData: dados.qrCodeData,
-    });
+      qrCodeData: dados.qrCodeData || '',
+    }, { merge: true });
 
-    // Enviar para Google Sheets
+    // Envia para Google Sheets
     await enviarParaGoogleSheets({
       tipo: 'frequencia',
-      nome: dados.nome,
-      matricula: dados.matricula,
-      lotacao: dados.lotacao,
-      evento: dados.evento,
+      nome: dados.nome || '',
+      matricula: dados.matricula || '',
+      lotacao: dados.lotacao || '',
+      email: dados.email || '',
+      evento: dados.evento || '',
       dataHora: new Date().toLocaleString('pt-BR'),
     });
 
@@ -111,11 +120,10 @@ export const obterFrequenciaDoUsuario = async (usuarioId) => {
   try {
     const q = query(
       collection(db, 'frequencia'),
-      where('usuarioId', '==', usuarioId),
-      orderBy('dataHora', 'desc')
+      where('usuarioId', '==', usuarioId)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (error) {
     console.error('Erro ao obter frequência:', error);
     throw error;
@@ -144,18 +152,14 @@ export const enviarParaGoogleSheets = async (dados) => {
 
 export const abrirGoogleForms = (usuarioId, eventoId, usuarioNome, matricula) => {
   try {
-    // Montar URL do Google Forms com pré-preenchimento
     const formsId = process.env.REACT_APP_GOOGLE_FORMS_ID;
     const baseURL = `https://docs.google.com/forms/d/${formsId}/viewform`;
-    
     const params = new URLSearchParams({
       'entry.NOME': usuarioNome,
       'entry.MATRICULA': matricula,
       'entry.EVENTO_ID': eventoId,
     });
-
-    const url = `${baseURL}?${params.toString()}`;
-    window.open(url, '_blank');
+    window.open(`${baseURL}?${params.toString()}`, '_blank');
   } catch (error) {
     console.error('Erro ao abrir Google Forms:', error);
     throw error;
@@ -170,7 +174,6 @@ export const criarEvento = async (dadosEvento) => {
     await setDoc(eventoRef, {
       ...dadosEvento,
       dataCriacao: serverTimestamp(),
-      inscritos: [],
     });
     return eventoRef.id;
   } catch (error) {
@@ -183,11 +186,10 @@ export const obterFrequenciaDoEvento = async (eventoId) => {
   try {
     const q = query(
       collection(db, 'frequencia'),
-      where('eventoId', '==', eventoId),
-      orderBy('dataHora', 'desc')
+      where('eventoId', '==', eventoId)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (error) {
     console.error('Erro ao obter frequência do evento:', error);
     throw error;
@@ -198,7 +200,7 @@ export const obterTodosOsUsuarios = async () => {
   try {
     const q = query(collection(db, 'usuarios'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (error) {
     console.error('Erro ao obter usuários:', error);
     throw error;
@@ -208,9 +210,7 @@ export const obterTodosOsUsuarios = async () => {
 export const promoverParaAdmin = async (usuarioId) => {
   try {
     const usuarioRef = doc(db, 'usuarios', usuarioId);
-    await updateDoc(usuarioRef, {
-      isAdmin: true,
-    });
+    await updateDoc(usuarioRef, { isAdmin: true });
     return true;
   } catch (error) {
     console.error('Erro ao promover usuário:', error);

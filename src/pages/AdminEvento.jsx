@@ -1,56 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { obterDetalhesEvento, obterFrequenciaDoEvento } from '../services/firestore';
+import { obterDetalhesEvento, obterFrequenciaDoEvento, obterTodosOsUsuarios } from '../services/firestore';
 import '../styles/App.css';
 
-// ─── Exportação XLSX sem dependência de backend ───────────────────
-// Usamos a API Blob + CSV simples que o Excel abre nativamente.
-// Para XLSX real, instale a lib "xlsx" (SheetJS) e substitua gerarXLSX().
-function gerarCSVParaExcel(participantes, nomeEvento, evento) {
-  const BOM   = '\uFEFF';                   // garante UTF-8 no Excel
-  const sep   = ';';                        // separador ponto-e-vírgula (padrão PT-BR)
+function gerarCSVParaExcel(linhasDados, nomeEvento, totalDias) {
+  const BOM = '\uFEFF';
+  const sep = ';';
   const header = ['Nome', 'Matrícula', 'Lotação', 'E-mail', 'Vínculo JMU', 'Dias Presentes', 'Total Dias', '% Presença', 'Situação'].join(sep);
 
-  const linhas = participantes.map(p => {
-  const diasPresentes = p.diasPresentes || 1;
-  const totalDias = evento?.totalDias || 1;
-  const percentual = Math.round((diasPresentes / totalDias) * 100);
-  return [
-    p.nome ?? '',
-    p.matricula ?? '',
-    p.lotacao ?? '',
-    p.email ?? '',
-    p.ligacaoJMU ?? '',
-    diasPresentes,
-    totalDias,
-    percentual + '%',
-    percentual >= 80 ? 'Aprovado' : 'Reprovado',
-  ].join(sep);
-});
+  const linhas = linhasDados.map(p => {
+    const presentes = p.diasPresentes || 0;
+    const pct = totalDias > 0 ? Math.round((presentes / totalDias) * 100) : 0;
+    return [
+      p.nome ?? '',
+      p.matricula ?? '',
+      p.lotacao ?? '',
+      p.email ?? '',
+      p.ligacaoJMU ?? '',
+      presentes,
+      totalDias,
+      pct + '%',
+      pct >= 80 ? 'Aprovado' : 'Reprovado',
+    ].join(sep);
+  });
 
   const csv = BOM + [header, ...linhas].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href     = url;
+  link.href = url;
   link.download = `frequencia_${nomeEvento.replace(/\s+/g, '_')}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
-
-// Para XLSX real com SheetJS:
-// import * as XLSX from 'xlsx';
-// function gerarXLSX(participantes, nomeEvento) {
-//   const ws = XLSX.utils.json_to_sheet(participantes.map(p => ({
-//     Nome: p.nome, Matrícula: p.matricula, Lotação: p.lotacao,
-//     'Data/Hora': new Date(p.dataHora?.seconds * 1000).toLocaleString('pt-BR'),
-//   })));
-//   const wb = XLSX.utils.book_new();
-//   XLSX.utils.book_append_sheet(wb, ws, 'Frequência');
-//   XLSX.writeFile(wb, `frequencia_${nomeEvento}.xlsx`);
-// }
-// ──────────────────────────────────────────────────────────────────
 
 function getIniciais(nome = '') {
   return nome.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
@@ -60,38 +42,26 @@ function AdminEvento() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [evento,        setEvento]        = useState(null);
-  const [participantes, setParticipantes] = useState([]);
-  const [carregando,    setCarregando]    = useState(true);
-  const [busca,         setBusca]         = useState('');
-  const [exportando,    setExportando]    = useState(false);
+  const [evento, setEvento] = useState(null);
+  const [frequencias, setFrequencias] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [exportando, setExportando] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     Promise.all([
       obterDetalhesEvento(id),
       obterFrequenciaDoEvento(id),
-    ]).then(([ev, freqs]) => {
+      obterTodosOsUsuarios(),
+    ]).then(([ev, freqs, users]) => {
       setEvento(ev);
-      setParticipantes(freqs);
+      setFrequencias(freqs);
+      setUsuarios(users);
     }).catch(console.error)
       .finally(() => setCarregando(false));
   }, [id]);
-
-  const participantesFiltrados = participantes.filter(p =>
-    p.nome?.toLowerCase().includes(busca.toLowerCase()) ||
-    p.matricula?.toLowerCase().includes(busca.toLowerCase()) ||
-    p.lotacao?.toLowerCase().includes(busca.toLowerCase())
-  );
-
-  const handleExportar = () => {
-    setExportando(true);
-    try {
-      gerarCSVParaExcel(participantes, evento?.titulo ?? 'evento', evento);
-    } finally {
-      setTimeout(() => setExportando(false), 800);
-    }
-  };
 
   if (carregando) {
     return (
@@ -101,7 +71,7 @@ function AdminEvento() {
     );
   }
 
- if (!evento) {
+  if (!evento) {
     return (
       <div className="app-container">
         <div className="tbar">
@@ -109,27 +79,59 @@ function AdminEvento() {
           <h3>Evento não encontrado</h3>
         </div>
         <div className="app-content">
-          <div className="alert alert-danger">
-            Evento não encontrado. Ele pode ter sido removido ou o ID está incorreto.
-          </div>
-          <button className="btn btn-secondary" onClick={() => navigate('/admin')}>
-            Voltar ao painel
-          </button>
+          <div className="alert alert-danger">Evento não encontrado.</div>
+          <button className="btn btn-secondary" onClick={() => navigate('/admin')}>Voltar ao painel</button>
+        </div>
+        <div className="app-bottom-nav">
+          <button className="nav-item" onClick={() => navigate('/')}><span>🏠</span>Início</button>
+          <button className="nav-item" onClick={() => navigate('/eventos')}><span>📅</span>Eventos</button>
+          <button className="nav-item active"><span>⚙️</span>Admin</button>
+          <button className="nav-item" onClick={() => navigate('/perfil')}><span>👤</span>Perfil</button>
         </div>
       </div>
     );
   }
 
-  const totalInscritos = evento.inscritos?.length ?? 0;
-  const totalPresentes = participantes.length;
-  const taxaPresenca   = totalInscritos > 0
-    ? Math.round((totalPresentes / totalInscritos) * 100)
-    : 0;
+  const totalDias = evento.totalDias || 1;
+  const idsInscritos = evento.inscritos || [];
+
+  // Junta dados do usuário inscrito com a frequência dele (se houver)
+  const listaInscritos = idsInscritos.map(uid => {
+    const u = usuarios.find(x => x.id === uid) || {};
+    const f = frequencias.find(x => x.usuarioId === uid);
+    return {
+      usuarioId: uid,
+      nome: u.nome || f?.nome || 'Usuário',
+      matricula: u.matricula || f?.matricula || '',
+      lotacao: u.lotacao || f?.lotacao || '',
+      email: u.email || f?.email || '',
+      ligacaoJMU: u.ligacaoJMU || f?.ligacaoJMU || '',
+      diasPresentes: f?.diasPresentes || 0,
+      confirmou: !!f,
+    };
+  });
+
+  const totalInscritos = listaInscritos.length;
+  const totalPresentes = listaInscritos.filter(p => p.confirmou).length;
+  const taxaPresenca = totalInscritos > 0 ? Math.round((totalPresentes / totalInscritos) * 100) : 0;
+
+  const listaFiltrada = listaInscritos.filter(p =>
+    p.nome.toLowerCase().includes(busca.toLowerCase()) ||
+    p.matricula.toLowerCase().includes(busca.toLowerCase()) ||
+    p.lotacao.toLowerCase().includes(busca.toLowerCase())
+  );
+
+  const handleExportar = () => {
+    setExportando(true);
+    try {
+      gerarCSVParaExcel(listaInscritos, evento.titulo, totalDias);
+    } finally {
+      setTimeout(() => setExportando(false), 600);
+    }
+  };
 
   return (
     <div className="app-container">
-
-      {/* ── Cabeçalho roxo ── */}
       <div className="admin-evento-header">
         <button
           onClick={() => navigate('/admin')}
@@ -137,15 +139,13 @@ function AdminEvento() {
         >← Painel Admin</button>
         <h2>{evento.titulo}</h2>
         <p>
-          {evento.data ? new Date(evento.data).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) : '—'}
-          {evento.horarioInicio ? ` · ${evento.horarioInicio}` : ''}
+          {evento.data ? new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' }) : '—'}
+          {totalDias > 1 ? ` · ${totalDias} dias` : ''}
           {evento.local ? ` · ${evento.local}` : ''}
         </p>
       </div>
 
       <div className="app-content">
-
-        {/* ── Métricas ── */}
         <div className="admin-stat-row">
           <div className="admin-stat-box">
             <div className="admin-stat-box-value">{totalInscritos}</div>
@@ -153,7 +153,7 @@ function AdminEvento() {
           </div>
           <div className="admin-stat-box">
             <div className="admin-stat-box-value">{totalPresentes}</div>
-            <div className="admin-stat-box-label">Presentes</div>
+            <div className="admin-stat-box-label">Compareceram</div>
           </div>
           <div className="admin-stat-box">
             <div className="admin-stat-box-value">{taxaPresenca}%</div>
@@ -161,43 +161,23 @@ function AdminEvento() {
           </div>
         </div>
 
-        {/* ── Barra presença ── */}
-        <div style={{ marginBottom: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-            <span>Presença confirmada</span>
-            <span>{totalPresentes} / {totalInscritos}</span>
-          </div>
-          <div className="progress-bar-track">
-            <div className="progress-bar-fill" style={{ width: `${taxaPresenca}%`, background: taxaPresenca >= 80 ? 'var(--color-success)' : 'var(--color-primary)' }} />
-          </div>
-        </div>
-
-        {/* ── Exportar ── */}
         <button
           className="btn-export"
           onClick={handleExportar}
-          disabled={exportando || participantes.length === 0}
+          disabled={exportando || listaInscritos.length === 0}
         >
-          {exportando ? '⏳ Gerando arquivo...' : '📥 Exportar lista de presença (.xlsx)'}
+          {exportando ? '⏳ Gerando arquivo...' : '📥 Exportar lista (.csv para Excel)'}
         </button>
-
-        {participantes.length === 0 && (
-          <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', textAlign: 'center', marginTop: '4px' }}>
-            Nenhuma presença confirmada ainda.
-          </div>
-        )}
 
         <div className="divider" />
 
-        {/* ── Lista de participantes ── */}
         <div className="section-header">
-          <span className="section-title">Presenças confirmadas</span>
+          <span className="section-title">Inscritos</span>
           <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-            {participantesFiltrados.length} registros
+            {listaFiltrada.length} pessoa(s)
           </span>
         </div>
 
-        {/* Busca */}
         <div style={{ marginBottom: '12px' }}>
           <input
             className="form-input"
@@ -208,41 +188,60 @@ function AdminEvento() {
           />
         </div>
 
-        {participantesFiltrados.length === 0 ? (
+        {listaFiltrada.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
-            {busca ? 'Nenhum resultado para essa busca.' : 'Nenhuma presença registrada ainda.'}
+            {busca ? 'Nenhum resultado para essa busca.' : 'Nenhum inscrito ainda.'}
           </div>
         ) : (
-          participantesFiltrados.map((p, i) => {
-            const hora = p.dataHora?.seconds
-              ? new Date(p.dataHora.seconds * 1000).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-              : null;
-
+          listaFiltrada.map((p, i) => {
+            const pct = totalDias > 0 ? Math.round((p.diasPresentes / totalDias) * 100) : 0;
+            const aprovado = pct >= 80;
             return (
-              <div key={p.id ?? i} className="participante-row">
-                <div className="participante-avatar">
-                  {getIniciais(p.nome)}
-                </div>
-                <div className="participante-info">
-                  <div className="participante-nome">{p.nome}</div>
-                  <div className="participante-sub">
-                    {[p.matricula, p.lotacao].filter(Boolean).join(' · ')}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  {hora && (
-                    <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                      {hora}
+              <div key={p.usuarioId ?? i} className="card" style={{ cursor: 'default', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: p.confirmou ? '8px' : '0' }}>
+                  <div className="participante-avatar">{getIniciais(p.nome)}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="participante-nome">{p.nome}</div>
+                    <div className="participante-sub">
+                      {[p.matricula, p.lotacao].filter(Boolean).join(' · ') || '—'}
                     </div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+                      {[p.email, p.ligacaoJMU].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                  {p.confirmou ? (
+                    <span className="pill pill-success" style={{ fontSize: '10px', padding: '2px 8px', flexShrink: 0 }}>
+                      {aprovado ? '✓ Aprovado' : 'Presente'}
+                    </span>
+                  ) : (
+                    <span className="pill pill-info" style={{ fontSize: '10px', padding: '2px 8px', flexShrink: 0 }}>
+                      Inscrito
+                    </span>
                   )}
-                  <span className="pill pill-success" style={{ marginTop: '2px', display: 'inline-block', fontSize: '10px', padding: '2px 8px' }}>
-                    ✓ Presente
-                  </span>
                 </div>
+
+                {p.confirmou && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                      <span>Presença: {p.diasPresentes}/{totalDias} dia(s)</span>
+                      <span style={{ color: aprovado ? 'var(--color-success)' : 'var(--color-text-secondary)', fontWeight: 500 }}>{pct}%</span>
+                    </div>
+                    <div className="progress-bar-track">
+                      <div className="progress-bar-fill" style={{ width: `${pct}%`, background: aprovado ? 'var(--color-success)' : 'var(--color-primary)' }} />
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })
         )}
+      </div>
+
+      <div className="app-bottom-nav">
+        <button className="nav-item" onClick={() => navigate('/')}><span>🏠</span>Início</button>
+        <button className="nav-item" onClick={() => navigate('/eventos')}><span>📅</span>Eventos</button>
+        <button className="nav-item" onClick={() => navigate('/admin')}><span>⚙️</span>Admin</button>
+        <button className="nav-item" onClick={() => navigate('/perfil')}><span>👤</span>Perfil</button>
       </div>
     </div>
   );
