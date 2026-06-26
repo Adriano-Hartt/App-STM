@@ -126,17 +126,19 @@ export const obterFrequenciaDoUsuario = async (usuarioId) => {
 
 export const enviarParaGoogleSheets = async (dados) => {
   try {
-    // Esta função faz uma chamada HTTP para um backend que valida e envia para o Sheets
-    // O backend deve usar a Google Sheets API com credenciais de serviço
-    // Por enquanto, vamos apenas logar o dado
-    console.log('Enviando para Google Sheets:', dados);
-    
-    // Quando configurar o backend:
-    // const response = await axios.post(process.env.REACT_APP_BACKEND_URL + '/api/sheets', dados);
-    // return response.data;
+    const url = process.env.REACT_APP_SHEETS_WEBHOOK_URL;
+    if (!url) {
+      console.warn('URL do Google Sheets não configurada.');
+      return;
+    }
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(dados),
+    });
+    console.log('Dados enviados para Google Sheets com sucesso!');
   } catch (error) {
     console.error('Erro ao enviar para Google Sheets:', error);
-    throw error;
   }
 };
 
