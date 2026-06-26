@@ -7,23 +7,14 @@ function gerarCSVParaExcel(linhasDados, nomeEvento, totalDias) {
   const BOM = '\uFEFF';
   const sep = ';';
   const header = ['Nome', 'Matrícula', 'Lotação', 'E-mail', 'Vínculo JMU', 'Dias Presentes', 'Total Dias', '% Presença', 'Situação'].join(sep);
-
   const linhas = linhasDados.map(p => {
     const presentes = p.diasPresentes || 0;
     const pct = totalDias > 0 ? Math.round((presentes / totalDias) * 100) : 0;
     return [
-      p.nome ?? '',
-      p.matricula ?? '',
-      p.lotacao ?? '',
-      p.email ?? '',
-      p.ligacaoJMU ?? '',
-      presentes,
-      totalDias,
-      pct + '%',
-      pct >= 80 ? 'Aprovado' : 'Reprovado',
+      p.nome ?? '', p.matricula ?? '', p.lotacao ?? '', p.email ?? '', p.ligacaoJMU ?? '',
+      presentes, totalDias, pct + '%', pct >= 80 ? 'Aprovado' : 'Reprovado',
     ].join(sep);
   });
-
   const csv = BOM + [header, ...linhas].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -48,6 +39,8 @@ function AdminEvento() {
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState('');
   const [exportando, setExportando] = useState(false);
+  const [filtro, setFiltro] = useState('todos');     // todos | aprovados | reprovados
+  const [ordem, setOrdem] = useState('maior');         // maior | menor
 
   useEffect(() => {
     if (!id) return;
@@ -64,11 +57,7 @@ function AdminEvento() {
   }, [id]);
 
   if (carregando) {
-    return (
-      <div className="splash-loading">
-        <p>Carregando dados do evento...</p>
-      </div>
-    );
+    return <div className="splash-loading"><p>Carregando dados do evento...</p></div>;
   }
 
   if (!evento) {
@@ -95,10 +84,11 @@ function AdminEvento() {
   const totalDias = evento.totalDias || 1;
   const idsInscritos = evento.inscritos || [];
 
-  // Junta dados do usuário inscrito com a frequência dele (se houver)
   const listaInscritos = idsInscritos.map(uid => {
     const u = usuarios.find(x => x.id === uid) || {};
     const f = frequencias.find(x => x.usuarioId === uid);
+    const presentes = f?.diasPresentes || 0;
+    const pct = totalDias > 0 ? Math.round((presentes / totalDias) * 100) : 0;
     return {
       usuarioId: uid,
       nome: u.nome || f?.nome || 'Usuário',
@@ -106,20 +96,34 @@ function AdminEvento() {
       lotacao: u.lotacao || f?.lotacao || '',
       email: u.email || f?.email || '',
       ligacaoJMU: u.ligacaoJMU || f?.ligacaoJMU || '',
-      diasPresentes: f?.diasPresentes || 0,
+      diasPresentes: presentes,
+      pct,
+      aprovado: pct >= 80,
       confirmou: !!f,
     };
   });
 
   const totalInscritos = listaInscritos.length;
   const totalPresentes = listaInscritos.filter(p => p.confirmou).length;
+  const totalAprovados = listaInscritos.filter(p => p.aprovado).length;
   const taxaPresenca = totalInscritos > 0 ? Math.round((totalPresentes / totalInscritos) * 100) : 0;
 
-  const listaFiltrada = listaInscritos.filter(p =>
+  // 1) Filtra por situação
+  let lista = listaInscritos.filter(p => {
+    if (filtro === 'aprovados') return p.aprovado;
+    if (filtro === 'reprovados') return !p.aprovado;
+    return true;
+  });
+
+  // 2) Filtra por busca
+  lista = lista.filter(p =>
     p.nome.toLowerCase().includes(busca.toLowerCase()) ||
     p.matricula.toLowerCase().includes(busca.toLowerCase()) ||
     p.lotacao.toLowerCase().includes(busca.toLowerCase())
   );
+
+  // 3) Ordena
+  lista = [...lista].sort((a, b) => ordem === 'maior' ? b.pct - a.pct : a.pct - b.pct);
 
   const handleExportar = () => {
     setExportando(true);
@@ -129,6 +133,20 @@ function AdminEvento() {
       setTimeout(() => setExportando(false), 600);
     }
   };
+
+  const btnFiltro = (valor, texto) => (
+    <button
+      onClick={() => setFiltro(valor)}
+      style={{
+        padding: '5px 12px', borderRadius: '20px', border: '0.5px solid', fontSize: '12px',
+        cursor: 'pointer', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap',
+        fontWeight: filtro === valor ? 500 : 400,
+        background: filtro === valor ? 'var(--color-primary)' : 'transparent',
+        color: filtro === valor ? '#fff' : 'var(--color-text-secondary)',
+        borderColor: filtro === valor ? 'var(--color-primary)' : 'var(--color-border)',
+      }}
+    >{texto}</button>
+  );
 
   return (
     <div className="app-container">
@@ -152,12 +170,12 @@ function AdminEvento() {
             <div className="admin-stat-box-label">Inscritos</div>
           </div>
           <div className="admin-stat-box">
-            <div className="admin-stat-box-value">{totalPresentes}</div>
-            <div className="admin-stat-box-label">Compareceram</div>
+            <div className="admin-stat-box-value">{totalAprovados}</div>
+            <div className="admin-stat-box-label">Aprovados</div>
           </div>
           <div className="admin-stat-box">
             <div className="admin-stat-box-value">{taxaPresenca}%</div>
-            <div className="admin-stat-box-label">Taxa presença</div>
+            <div className="admin-stat-box-label">Compareceram</div>
           </div>
         </div>
 
@@ -171,13 +189,27 @@ function AdminEvento() {
 
         <div className="divider" />
 
-        <div className="section-header">
-          <span className="section-title">Inscritos</span>
-          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-            {listaFiltrada.length} pessoa(s)
-          </span>
+        {/* Filtros */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', overflowX: 'auto', paddingBottom: '2px' }}>
+          {btnFiltro('todos', `Todos (${listaInscritos.length})`)}
+          {btnFiltro('aprovados', `Aprovados (${totalAprovados})`)}
+          {btnFiltro('reprovados', `Reprovados (${listaInscritos.length - totalAprovados})`)}
         </div>
 
+        {/* Ordenação */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>Ordenar:</span>
+          <button
+            onClick={() => setOrdem('maior')}
+            style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', border: '0.5px solid var(--color-border)', background: ordem === 'maior' ? 'var(--color-background-secondary)' : 'transparent', color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)' }}
+          >↓ Maior presença</button>
+          <button
+            onClick={() => setOrdem('menor')}
+            style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', border: '0.5px solid var(--color-border)', background: ordem === 'menor' ? 'var(--color-background-secondary)' : 'transparent', color: 'var(--color-text-primary)', fontFamily: 'var(--font-sans)' }}
+          >↑ Menor presença</button>
+        </div>
+
+        {/* Busca */}
         <div style={{ marginBottom: '12px' }}>
           <input
             className="form-input"
@@ -188,52 +220,47 @@ function AdminEvento() {
           />
         </div>
 
-        {listaFiltrada.length === 0 ? (
+        <div className="section-header">
+          <span className="section-title">Inscritos</span>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{lista.length} pessoa(s)</span>
+        </div>
+
+        {lista.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
-            {busca ? 'Nenhum resultado para essa busca.' : 'Nenhum inscrito ainda.'}
+            Nenhum resultado para esse filtro.
           </div>
         ) : (
-          listaFiltrada.map((p, i) => {
-            const pct = totalDias > 0 ? Math.round((p.diasPresentes / totalDias) * 100) : 0;
-            const aprovado = pct >= 80;
-            return (
-              <div key={p.usuarioId ?? i} className="card" style={{ cursor: 'default', marginBottom: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: p.confirmou ? '8px' : '0' }}>
-                  <div className="participante-avatar">{getIniciais(p.nome)}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="participante-nome">{p.nome}</div>
-                    <div className="participante-sub">
-                      {[p.matricula, p.lotacao].filter(Boolean).join(' · ') || '—'}
-                    </div>
-                    <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-                      {[p.email, p.ligacaoJMU].filter(Boolean).join(' · ')}
-                    </div>
-                  </div>
-                  {p.confirmou ? (
-                    <span className="pill pill-success" style={{ fontSize: '10px', padding: '2px 8px', flexShrink: 0 }}>
-                      {aprovado ? '✓ Aprovado' : 'Presente'}
-                    </span>
-                  ) : (
-                    <span className="pill pill-info" style={{ fontSize: '10px', padding: '2px 8px', flexShrink: 0 }}>
-                      Inscrito
-                    </span>
-                  )}
+          lista.map((p, i) => (
+            <div key={p.usuarioId ?? i} className="card" style={{ cursor: 'default', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: p.confirmou ? '8px' : '0' }}>
+                <div className="participante-avatar">{getIniciais(p.nome)}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="participante-nome">{p.nome}</div>
+                  <div className="participante-sub">{[p.matricula, p.lotacao].filter(Boolean).join(' · ') || '—'}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{[p.email, p.ligacaoJMU].filter(Boolean).join(' · ')}</div>
                 </div>
-
-                {p.confirmou && (
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
-                      <span>Presença: {p.diasPresentes}/{totalDias} dia(s)</span>
-                      <span style={{ color: aprovado ? 'var(--color-success)' : 'var(--color-text-secondary)', fontWeight: 500 }}>{pct}%</span>
-                    </div>
-                    <div className="progress-bar-track">
-                      <div className="progress-bar-fill" style={{ width: `${pct}%`, background: aprovado ? 'var(--color-success)' : 'var(--color-primary)' }} />
-                    </div>
-                  </div>
+                {p.confirmou ? (
+                  <span className="pill" style={{ fontSize: '10px', padding: '2px 8px', flexShrink: 0, background: p.aprovado ? '#EAF3DE' : '#FCEBEB', color: p.aprovado ? '#27500A' : '#791F1F' }}>
+                    {p.aprovado ? '✓ Aprovado' : '✗ Reprovado'}
+                  </span>
+                ) : (
+                  <span className="pill pill-info" style={{ fontSize: '10px', padding: '2px 8px', flexShrink: 0 }}>Inscrito</span>
                 )}
               </div>
-            );
-          })
+
+              {p.confirmou && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                    <span>Presença: {p.diasPresentes}/{totalDias} dia(s)</span>
+                    <span style={{ color: p.aprovado ? 'var(--color-success)' : '#791F1F', fontWeight: 500 }}>{p.pct}%</span>
+                  </div>
+                  <div className="progress-bar-track">
+                    <div className="progress-bar-fill" style={{ width: `${p.pct}%`, background: p.aprovado ? 'var(--color-success)' : '#C0392B' }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
         )}
       </div>
 

@@ -10,7 +10,7 @@ function CriarEvento() {
   const [form, setForm] = useState({
     titulo: '', tipo: '', descricao: '',
     horarioInicio: '', horarioFim: '',
-    local: '', cargaHoraria: '', capacidade: '',
+    local: '', cargaHoraria: '', capacidade: '', formsUrl: '',
   });
   const [datas, setDatas] = useState(['']);
 
@@ -142,6 +142,11 @@ function CriarEvento() {
               <label className="form-label">Capacidade (vagas)</label>
               <input className="form-input" type="number" name="capacidade" placeholder="Ex: 40" value={form.capacidade} onChange={handle} />
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Link do Google Forms de avaliação (opcional)</label>
+            <input className="form-input" name="formsUrl" placeholder="Cole aqui. Se vazio, usa o formulário padrão." value={form.formsUrl} onChange={handle} />
           </div>
 
           {diasValidos > 0 && (
