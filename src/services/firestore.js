@@ -40,9 +40,9 @@ export const obterDetalhesEvento = async (eventoId) => {
 export const inscreverEmEvento = async (usuarioId, eventoId) => {
   try {
     const eventoRef = doc(db, 'eventos', eventoId);
-    await updateDoc(eventoRef, { inscritos: arrayUnion(usuarioId) });
+    await setDoc(eventoRef, { inscritos: arrayUnion(usuarioId) }, { merge: true });
     const usuarioRef = doc(db, 'usuarios', usuarioId);
-    await updateDoc(usuarioRef, { eventosInscritos: arrayUnion(eventoId) });
+    await setDoc(usuarioRef, { eventosInscritos: arrayUnion(eventoId) }, { merge: true });
     return true;
   } catch (error) {
     console.error('Erro ao inscrever:', error);
