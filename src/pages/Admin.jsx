@@ -90,35 +90,7 @@ function Admin() {
               </div>
             ))}
 
-            {/* Fallback com evento de exemplo */}
-            {!carregando && eventos.length === 0 && (
-              <div className="card">
-                <div className="card-header">
-                  <div>
-                    <div className="card-title" style={{ fontSize: '13px' }}>
-                      Gestão de Pessoas no Setor Público
-                    </div>
-                    <div className="card-sub">15 jun · 09h–12h · 24 inscritos</div>
-                  </div>
-                  <span className="pill pill-success">Ativo</span>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
-                  <button
-                    className="btn-sm"
-                    onClick={() => navigate('/admin/evento/exemplo')}
-                    style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)', fontWeight: 500 }}
-                  >
-                    📋 Ver presenças
-                  </button>
-                  <button className="btn-sm" onClick={() => navigate('/admin/qrcode/exemplo')} style={{ background: '#EAF3DE', color: '#3B6D11' }}>
-                    🔳 QR Codes
-                  </button>
-                  <button className="btn-sm" onClick={() => navigate('/admin/editar-evento/exemplo')}>
-                    ✏️ Editar
-                  </button>
-                </div>
-              </div>
-            )}
+            
           </>
         )}
 
